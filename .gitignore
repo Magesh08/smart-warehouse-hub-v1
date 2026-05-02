@@ -1,0 +1,41 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Database
+.pgdata/
+
+# Alembic (keep migrations, ignore generated env)
+# alembic/versions/ — keep these
+
+# Logs & PIDs
+/tmp/
+*.log
+*.pid
+
+# Nginx generated config (generated at runtime by build.sh)
+/tmp/boulty_nginx.conf
+/tmp/boulty_frontend
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Env files
+.env
+.env.*
+!.env.example
