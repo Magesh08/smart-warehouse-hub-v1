@@ -28,7 +28,7 @@ async def publish_message(payload: PublishMessage, db: AsyncSession = Depends(ge
     await db.flush()
     await db.refresh(record)
 
-    # 2. Publish to Eclipse Mosquitto MQTT Broker
+    # 2. Publish to Eclipse PubSub MQTT Broker
     envelope = {
         "type": "message",
         "channel": payload.channel,
@@ -86,9 +86,9 @@ async def message_history(channel: str, limit: int = 50, db: AsyncSession = Depe
 # ──────────────────────────────────────────────
 @router.get("/api/pubsub/channels")
 async def list_channels():
-    # Since Mosquitto now handles routing, the backend no longer tracks active connections.
+    # Since PubSub now handles routing, the backend no longer tracks active connections.
     return APIResponse(
         success=True,
-        data={"status": "handled_by_mosquitto"},
-        message="Active channels are managed by Eclipse Mosquitto",
+        data={"status": "handled_by_pubsub"},
+        message="Active channels are managed by Eclipse PubSub",
     )

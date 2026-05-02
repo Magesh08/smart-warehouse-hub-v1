@@ -15,7 +15,7 @@ fi
 echo "[1/6] Installing Python deps..."
 .venv/bin/pip install -q -r requirements.txt
 
-# (Mosquitto installation block removed since we use public HiveMQ)
+# (PubSub installation block removed since we use public HiveMQ)
 
 # ── PostgreSQL ──
 echo "[3/6] Starting PostgreSQL and running migrations..."

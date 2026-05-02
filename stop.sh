@@ -12,7 +12,7 @@ pkill -f "uvicorn backend.main:app" 2>/dev/null || true
 nginx -c /tmp/boulty_nginx.conf -s stop 2>/dev/null || true
 pkill -f "nginx.*boulty" 2>/dev/null && echo "  ✓ Nginx stopped"
 
-# (Removed Mosquitto kill command since we use HiveMQ)
+# (Removed PubSub kill command since we use HiveMQ)
 
 # Stop PostgreSQL
 if [ -d ".pgdata" ]; then
