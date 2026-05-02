@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>boulty-v1 | Local Stack Dashboard</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    :root {
+      --bg: #0d0f14;
+      --card: #161b26;
+      --border: #2a2f3f;
+      --accent: #6c63ff;
+      --accent2: #00d4aa;
+      --red: #ff4f6a;
+      --yellow: #ffd166;
+      --text: #e2e8f0;
+      --muted: #8892a4;
+      --green: #3ddc97;
+      --font: 'Inter', sans-serif
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100vh;
+      padding: 20px
+    }
+
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    h1 {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 4px
+    }
+
+    .subtitle {
+      color: var(--muted);
+      margin-bottom: 24px;
+      font-size: .9rem
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      max-width: 1200px;
+      margin: 0 auto
+    }
+
+    @media(max-width:900px) {
+      .grid {
+        grid-template-columns: 1fr
+      }
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      position: relative;
+      overflow: hidden
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2))
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px
+    }
+
+    .card-icon {
+      font-size: 1.4rem
+    }
+
+    .card-title {
+      font-size: 1rem;
+      font-weight: 600
+    }
+
+    .badge {
+      font-size: .7rem;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-weight: 500
+    }
+
+    .badge-green {
+      background: rgba(61, 220, 151, .15);
+      color: var(--green)
+    }
+
+    .badge-yellow {
+      background: rgba(255, 209, 102, .15);
+      color: var(--yellow)
+    }
+
+    .badge-red {
+      background: rgba(255, 79, 106, .15);
+      color: var(--red)
+    }
+
+    .badge-blue {
+      background: rgba(108, 99, 255, .15);
+      color: var(--accent)
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border)
+    }
+
+    .stat-row:last-child {
+      border-bottom: none
+    }
+
+    .stat-label {
+      color: var(--muted);
+      font-size: .85rem
+    }
+
+    .stat-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .85rem;
+      color: var(--accent2)
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: .85rem;
+      font-weight: 500;
+      transition: all .2s
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #8b5cf6);
+      color: #fff
+    }
+
+    .btn-primary:hover {
+      opacity: .85;
+      transform: translateY(-1px)
+    }
+
+    .btn-secondary {
+      background: var(--border);
+      color: var(--text)
+    }
+
+    .btn-secondary:hover {
+      background: #3a3f50
+    }
+
+    .btn-success {
+      background: rgba(61, 220, 151, .15);
+      color: var(--green);
+      border: 1px solid rgba(61, 220, 151, .3)
+    }
+
+    .btn-danger {
+      background: rgba(255, 79, 106, .15);
+      color: var(--red);
+      border: 1px solid rgba(255, 79, 106, .3)
+    }
+
+    .btn-warn {
+      background: rgba(255, 209, 102, .15);
+      color: var(--yellow);
+      border: 1px solid rgba(255, 209, 102, .3)
+    }
+
+    .btn-patch {
+      background: rgba(108, 99, 255, .15);
+      color: var(--accent);
+      border: 1px solid rgba(108, 99, 255, .3)
+    }
+
+    .input {
+      width: 100%;
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: .85rem;
+      outline: none;
+      transition: border-color .2s
+    }
+
+    .input:focus {
+      border-color: var(--accent)
+    }
+
+    .textarea {
+      resize: vertical;
+      min-height: 80px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .8rem
+    }
+
+    .label {
+      font-size: .75rem;
+      color: var(--muted);
+      margin-bottom: 4px;
+      display: block
+    }
+
+    .form-group {
+      margin-bottom: 12px
+    }
+
+    .response-box {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .78rem;
+      max-height: 200px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      color: var(--accent2);
+      min-height: 40px
+    }
+
+    .msg-feed {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px;
+      max-height: 220px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px
+    }
+
+    .msg-item {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: .8rem
+    }
+
+    .msg-type-message {
+      border-left: 3px solid var(--accent2)
+    }
+
+    .msg-type-system {
+      border-left: 3px solid var(--yellow)
+    }
+
+    .msg-type-heartbeat {
+      border-left: 3px solid var(--muted);
+      opacity: .6
+    }
+
+    .msg-time {
+      color: var(--muted);
+      font-size: .7rem
+    }
+
+    .method-tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+      flex-wrap: wrap
+    }
+
+    .method-tab {
+      padding: 5px 12px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-size: .8rem;
+      font-weight: 600;
+      transition: all .2s
+    }
+
+    .method-tab.GET {
+      background: rgba(61, 220, 151, .1);
+      color: var(--green)
+    }
+
+    .method-tab.POST {
+      background: rgba(108, 99, 255, .1);
+      color: var(--accent)
+    }
+
+    .method-tab.PATCH {
+      background: rgba(255, 209, 102, .1);
+      color: var(--yellow)
+    }
+
+    .method-tab.DELETE {
+      background: rgba(255, 79, 106, .1);
+      color: var(--red)
+    }
+
+    .method-tab.active {
+      opacity: 1;
+      transform: scale(1.05);
+      box-shadow: 0 0 12px currentColor
+    }
+
+    .method-tab:not(.active) {
+      opacity: .5
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block
+    }
+
+    .dot-green {
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green)
+    }
+
+    .dot-red {
+      background: var(--red)
+    }
+
+    .dot-yellow {
+      background: var(--yellow);
+      box-shadow: 0 0 6px var(--yellow)
+    }
+
+    .latency-bar {
+      height: 6px;
+      border-radius: 3px;
+      background: linear-gradient(90deg, var(--green), var(--accent2));
+      margin-top: 4px;
+      transition: width .5s
+    }
+
+    .section-full {
+      grid-column: 1/-1
+    }
+
+    .flex-row {
+      display: flex;
+      gap: 8px;
+      align-items: center
+    }
+
+    .flex-col {
+      display: flex;
+      flex-direction: column;
+      gap: 8px
+    }
+
+    select.input {
+      cursor: pointer
+    }
+
+    .header {
+      max-width: 1200px;
+      margin: 0 auto 24px
+    }
+
+    .ping-history {
+      display: flex;
+      align-items: flex-end;
+      gap: 2px;
+      height: 40px
+    }
+
+    .ping-bar {
+      width: 8px;
+      background: var(--accent2);
+      border-radius: 2px;
+      transition: height .3s;
+      opacity: .8
+    }
+  </style>
+</head>
+
+<body>
+  <div class="header">
+    <h1>⚡ boulty-v1</h1>
+    <div class="subtitle">Local Full-Stack Dashboard · Python FastAPI + Nginx + Redis PubSub</div>
+  </div>
+
+  <div class="grid">
+
+    <!-- ══ BACKEND STATUS ══ -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-icon">🖥️</span>
+        <span class="card-title">Backend</span>
+        <span class="badge badge-green" id="be-status-badge">checking...</span>
+      </div>
+      <div id="be-stats">
+        <div class="stat-row"><span class="stat-label">Status</span><span class="stat-value" id="be-status">—</span>
+        </div>
+        <div class="stat-row"><span class="stat-label">Uptime</span><span class="stat-value" id="be-uptime">—</span>
+        </div>
+        <div class="stat-row"><span class="stat-label">Items in store</span><span class="stat-value"
+            id="be-items">—</span></div>
+        <div class="stat-row"><span class="stat-label">Version</span><span class="stat-value" id="be-version">—</span>
+        </div>
+        <div class="stat-row"><span class="stat-label">Last ping</span><span class="stat-value" id="be-ping">—</span>
+        </div>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="fetchBackendHealth()">🔄 Ping</button>
+        <a href="http://localhost:8000/docs" target="_blank" class="btn btn-secondary">📄 API Docs</a>
+      </div>
+    </div>
+
+    <!-- ══ NETWORKING ══ -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-icon">🌐</span>
+        <span class="card-title">Networking</span>
+        <span class="badge badge-blue">Nginx :8080</span>
+      </div>
+      <div class="stat-row"><span class="stat-label">Proxy</span><span class="stat-value">Nginx → FastAPI :8000</span>
+      </div>
+      <div class="stat-row"><span class="stat-label">Nginx Health</span><span class="stat-value" id="ng-status">—</span>
+      </div>
+      <div class="stat-row"><span class="stat-label">Last Latency</span><span class="stat-value"
+          id="ng-latency">—</span></div>
+      <div class="stat-row"><span class="stat-label">X-Process-Time</span><span class="stat-value" id="ng-proc">—</span>
+      </div>
+      <div class="stat-row"><span class="stat-label">X-Server</span><span class="stat-value" id="ng-server">—</span>
+      </div>
+      <div style="margin-top:12px">
+        <span class="label">Latency History</span>
+        <div class="ping-history" id="latency-history"></div>
+      </div>
+      <div style="margin-top:12px">
+        <button class="btn btn-primary" onclick="checkNetworking()">📡 Check</button>
+      </div>
+    </div>
+
+    <!-- ══ PUBSUB SUBSCRIBE ══ -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-icon">📥</span>
+        <span class="card-title">PubSub · Subscribe</span>
+        <span class="badge" id="ws-badge" style="background:rgba(255,79,106,.15);color:var(--red)">disconnected</span>
+      </div>
+      <div class="form-group">
+        <label class="label">Channel</label>
+        <div class="flex-row">
+          <input class="input" id="sub-channel" value="general" placeholder="channel name">
+          <button class="btn btn-success" id="sub-btn" onclick="toggleSubscribe()">▶ Connect</button>
+        </div>
+      </div>
+      <div class="stat-row"><span class="stat-label">Messages received</span><span class="stat-value"
+          id="msg-count">0</span></div>
+      <div style="margin-top:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span class="label" style="margin:0">Live Feed</span>
+          <button class="btn btn-secondary" style="padding:3px 10px;font-size:.72rem"
+            onclick="clearFeed()">Clear</button>
+        </div>
+        <div class="msg-feed" id="msg-feed">
+          <div style="color:var(--muted);font-size:.8rem;padding:8px">Waiting for messages...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ PUBSUB PUBLISH ══ -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-icon">📤</span>
+        <span class="card-title">PubSub · Publish</span>
+        <span class="badge badge-blue">POST /api/pubsub/publish</span>
+      </div>
+      <div class="form-group">
+        <label class="label">Channel</label>
+        <input class="input" id="pub-channel" value="general" placeholder="channel name">
+      </div>
+      <div class="form-group">
+        <label class="label">Message</label>
+        <input class="input" id="pub-message" placeholder="Enter message to publish..."
+          onkeydown="if(event.key==='Enter')publishMsg()">
+      </div>
+      <div class="form-group">
+        <label class="label">Metadata (JSON optional)</label>
+        <input class="input" id="pub-meta" value="{}" placeholder='{"key":"value"}'>
+      </div>
+      <button class="btn btn-primary" onclick="publishMsg()" style="width:100%">🚀 Publish</button>
+      <div style="margin-top:10px">
+        <span class="label">Response</span>
+        <div class="response-box" id="pub-response">—</div>
+      </div>
+    </div>
+
+    <!-- ══ API TESTER ══ -->
+    <div class="card section-full">
+      <div class="card-header">
+        <span class="card-icon">🔧</span>
+        <span class="card-title">API Tester</span>
+        <span class="badge badge-blue">GET · POST · PATCH · DELETE</span>
+      </div>
+      <div class="method-tabs">
+        <button class="method-tab GET active" onclick="setMethod('GET')">GET</button>
+        <button class="method-tab POST" onclick="setMethod('POST')">POST</button>
+        <button class="method-tab PATCH" onclick="setMethod('PATCH')">PATCH</button>
+        <button class="method-tab DELETE" onclick="setMethod('DELETE')">DELETE</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div>
+          <div class="form-group">
+            <label class="label">URL</label>
+            <input class="input" id="api-url" value="/api/demo/items">
+          </div>
+          <div class="form-group" id="body-group">
+            <label class="label">Request Body (JSON)</label>
+            <textarea class="input textarea"
+              id="api-body">{"name":"New Widget","description":"Created via API tester","value":99.99,"tags":["test"]}</textarea>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-primary" onclick="runAPICall()">▶ Send Request</button>
+            <button class="btn btn-secondary" onclick="loadQuickExample('get')">📋 GET All</button>
+            <button class="btn btn-secondary" onclick="loadQuickExample('post')">➕ POST</button>
+            <button class="btn btn-secondary" onclick="loadQuickExample('patch')">✏️ PATCH</button>
+            <button class="btn btn-secondary" onclick="loadQuickExample('delete')">🗑️ DELETE</button>
+          </div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span class="label" style="margin:0">Response</span>
+            <div style="display:flex;gap:8px;align-items:center">
+              <span class="stat-value" id="api-status-code" style="font-size:.8rem">—</span>
+              <span class="stat-value" id="api-time" style="font-size:.75rem;color:var(--muted)">—</span>
+            </div>
+          </div>
+          <div class="response-box" id="api-response" style="max-height:260px;min-height:180px">Hit "Send Request" to
+            see the response here...</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /grid -->
+
+  <script>
+    const BASE = '';
+    let currentMethod = 'GET';
+    let ws = null;
+    let msgCount = 0;
+    const latencies = [];
+
+    // ── Backend Health (manual / fallback) ──
+    async function fetchBackendHealth() {
+      const t0 = performance.now();
+      try {
+        const r = await fetch(BASE + '/api/health');
+        const ms = Math.round(performance.now() - t0);
+        const d = await r.json();
+        applyBackendStats({ status: d.status, uptime_human: d.uptime_human, version: d.version, items_count: null, ping_ms: ms });
+        fetchStats();
+      } catch (e) {
+        document.getElementById('be-status').textContent = 'offline';
+        document.getElementById('be-status-badge').textContent = '● offline';
+        document.getElementById('be-status-badge').className = 'badge badge-red';
+      }
+    }
+
+    function applyBackendStats({ status, uptime_human, version, items_count, ping_ms }) {
+      document.getElementById('be-status').textContent = status || 'ok';
+      document.getElementById('be-uptime').textContent = uptime_human || '—';
+      document.getElementById('be-version').textContent = version || '—';
+      if (ping_ms != null) document.getElementById('be-ping').textContent = ping_ms + 'ms';
+      if (items_count != null) document.getElementById('be-items').textContent = items_count;
+      document.getElementById('be-status-badge').textContent = '● online';
+      document.getElementById('be-status-badge').className = 'badge badge-green';
+    }
+
+    async function fetchStats() {
+      try {
+        const r = await fetch(BASE + '/api/demo/stats');
+        const d = await r.json();
+        document.getElementById('be-items').textContent = d.data?.items_count ?? '—';
+      } catch (e) { }
+    }
+
+    // ── Networking (manual / fallback) ──
+    async function checkNetworking() {
+      const t0 = performance.now();
+      try {
+        const r = await fetch(BASE + '/nginx-health');
+        const ms = Math.round(performance.now() - t0);
+        if (!r.ok) throw new Error('Not ok');
+        applyNetworkingStats({ nginx_ok: true, latency_ms: ms, x_process_time: r.headers.get('X-Process-Time') || '—', x_server: r.headers.get('X-Server') || 'nginx' });
+      } catch (e) {
+        document.getElementById('ng-status').textContent = 'unreachable';
+        document.getElementById('ng-status').style.color = 'var(--red)';
+      }
+    }
+
+    function applyNetworkingStats({ nginx_ok, latency_ms, x_process_time, x_server }) {
+      if (latency_ms >= 0) {
+        latencies.push(latency_ms);
+        if (latencies.length > 20) latencies.shift();
+      }
+      if (nginx_ok) {
+        document.getElementById('ng-status').textContent = '● ok';
+        document.getElementById('ng-status').style.color = 'var(--green)';
+        document.getElementById('ng-latency').textContent = latency_ms + 'ms';
+        document.getElementById('ng-proc').textContent = x_process_time || '—';
+        document.getElementById('ng-server').textContent = x_server || 'nginx';
+        renderLatencyBars();
+      } else {
+        document.getElementById('ng-status').textContent = 'unreachable';
+        document.getElementById('ng-status').style.color = 'var(--red)';
+      }
+    }
+
+    // ── Dashboard WebSocket — replaces setInterval polling ──
+    let _dashWs = null;
+    let _dashReconnectTimer = null;
+
+    function startDashboardWS() {
+      if (_dashWs && _dashWs.readyState < 2) return; // already open / connecting
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      const url = `${proto}://${location.host}/ws/dashboard`;
+      _dashWs = new WebSocket(url);
+
+      _dashWs.onopen = () => {
+        console.log('[DashWS] connected');
+        if (_dashReconnectTimer) { clearTimeout(_dashReconnectTimer); _dashReconnectTimer = null; }
+      };
+
+      _dashWs.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg.type !== 'dashboard_update') return;
+          const b = msg.backend;
+          applyBackendStats({
+            status: b.status,
+            uptime_human: b.uptime_human,
+            version: b.version,
+            items_count: b.items_count,
+            ping_ms: null,
+          });
+          const n = msg.networking;
+          applyNetworkingStats({
+            nginx_ok: n.nginx_ok,
+            latency_ms: n.latency_ms,
+            x_process_time: n.x_process_time,
+            x_server: n.x_server,
+          });
+        } catch (e) { console.warn('[DashWS] parse error', e); }
+      };
+
+      _dashWs.onclose = () => {
+        console.warn('[DashWS] disconnected — reconnecting in 5s…');
+        _dashWs = null;
+        _dashReconnectTimer = setTimeout(startDashboardWS, 5000);
+      };
+
+      _dashWs.onerror = (e) => console.error('[DashWS] error', e);
+    }
+
+    function renderLatencyBars() {
+      const c = document.getElementById('latency-history');
+      const max = Math.max(...latencies, 1);
+      c.innerHTML = latencies.map(v => {
+        const h = Math.max(4, Math.round((v / max) * 38));
+        const color = v < 50 ? 'var(--green)' : v < 200 ? 'var(--yellow)' : 'var(--red)';
+        return `<div class="ping-bar" style="height:${h}px;background:${color}" title="${v}ms"></div>`;
+      }).join('');
+    }
+
+    // ── PubSub Subscribe (MQTT) ──
+    function toggleSubscribe() {
+      if (ws) { ws.end(); ws = null; return; }
+      const channel = document.getElementById('sub-channel').value.trim() || 'general';
+
+      // Fetch history from FastAPI first
+      fetch(`${BASE}/api/pubsub/history/${channel}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.success && d.data.messages) {
+            d.data.messages.reverse().forEach(m => {
+              addMsg({ type: 'message', data: { text: m.message, metadata: m.metadata }, channel: m.channel, published_at: m.published_at });
+            });
+            addMsg({ type: 'system', message: `Loaded ${d.data.count} past messages from history.` });
+          }
+        }).catch(console.error);
+
+      const wsUrl = `ws://broker.hivemq.com:8000/mqtt`;
+      ws = mqtt.connect(wsUrl);
+
+      document.getElementById('ws-badge').textContent = 'connecting...';
+      document.getElementById('sub-btn').textContent = '⏹ Disconnect';
+
+      ws.on('connect', () => {
+        document.getElementById('ws-badge').textContent = '● connected';
+        document.getElementById('ws-badge').style.cssText = 'background:rgba(61,220,151,.15);color:var(--green)';
+        addMsg({ type: 'system', message: 'MQTT connected. Subscribing to: ' + channel });
+        ws.subscribe(channel);
+      });
+
+      ws.on('message', (topic, message) => {
+        try {
+          const parsed = JSON.parse(message.toString());
+          addMsg(parsed);
+        } catch (err) {
+          addMsg({ type: 'message', data: { text: message.toString() }, channel: topic });
+        }
+      });
+
+      ws.on('close', () => {
+        ws = null;
+        document.getElementById('ws-badge').textContent = 'disconnected';
+        document.getElementById('ws-badge').style.cssText = 'background:rgba(255,79,106,.15);color:var(--red)';
+        document.getElementById('sub-btn').textContent = '▶ Connect';
+        addMsg({ type: 'system', message: 'MQTT disconnected' });
+      });
+      ws.on('error', (err) => addMsg({ type: 'system', message: 'MQTT error: ' + err.message }));
+    }
+
+    function addMsg(msg) {
+      const feed = document.getElementById('msg-feed');
+      if (msg.type === 'heartbeat') {
+        const hb = feed.querySelector('.hb');
+        if (hb) { hb.querySelector('.msg-time').textContent = '♥ ' + new Date().toLocaleTimeString(); return; }
+      }
+      const div = document.createElement('div');
+      div.className = `msg-item msg-type-${msg.type || 'message'}` + (msg.type === 'heartbeat' ? ' hb' : '');
+      const text = msg.type === 'message' ? (msg.data?.text || JSON.stringify(msg.data)) : (msg.message || msg.type);
+      const timeStr = msg.published_at ? new Date(msg.published_at).toLocaleTimeString() : new Date().toLocaleTimeString();
+      div.innerHTML = `<div style="font-weight:500;margin-bottom:2px">${msg.type === 'message' ? '💬 ' : msg.type === 'system' ? '⚙️ ' : '♥ '}${escHtml(String(text))}</div><div class="msg-time">${timeStr} · ch: ${msg.channel || '—'}</div>`;
+      feed.appendChild(div);
+      feed.scrollTop = feed.scrollHeight;
+      if (msg.type === 'message') { msgCount++; document.getElementById('msg-count').textContent = msgCount; }
+      // keep max 50 messages
+      while (feed.children.length > 50) feed.removeChild(feed.firstChild);
+    }
+
+    function clearFeed() {
+      document.getElementById('msg-feed').innerHTML = '';
+      msgCount = 0;
+      document.getElementById('msg-count').textContent = '0';
+    }
+
+    // ── PubSub Publish ──
+    async function publishMsg() {
+      const channel = document.getElementById('pub-channel').value.trim() || 'general';
+      const message = document.getElementById('pub-message').value.trim();
+      if (!message) return;
+      let meta = {};
+      try { meta = JSON.parse(document.getElementById('pub-meta').value); } catch (e) { }
+      const box = document.getElementById('pub-response');
+      try {
+        const r = await fetch(BASE + '/api/pubsub/publish', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ channel, message, metadata: meta })
+        });
+        const d = await r.json();
+        box.textContent = JSON.stringify(d, null, 2);
+        document.getElementById('pub-message').value = '';
+      } catch (e) { box.textContent = 'Error: ' + e.message; }
+    }
+
+    // ── API Tester ──
+    function setMethod(m) {
+      currentMethod = m;
+      document.querySelectorAll('.method-tab').forEach(t => {
+        t.classList.toggle('active', t.textContent === m);
+      });
+      document.getElementById('body-group').style.display = ['POST', 'PATCH'].includes(m) ? 'block' : 'none';
+    }
+
+    function loadQuickExample(type) {
+      const examples = {
+        get: { method: 'GET', url: '/api/demo/items', body: null },
+        post: { method: 'POST', url: '/api/demo/items', body: '{"name":"New Widget","description":"Created via tester","value":42.0,"tags":["new"]}' },
+        patch: { method: 'PATCH', url: '/api/demo/items/1', body: '{"name":"Updated Widget","value":55.5}' },
+        delete: { method: 'DELETE', url: '/api/demo/items/1', body: null },
+      };
+      const ex = examples[type];
+      setMethod(ex.method);
+      document.getElementById('api-url').value = ex.url;
+      if (ex.body) document.getElementById('api-body').value = ex.body;
+    }
+
+    async function runAPICall() {
+      const url = document.getElementById('api-url').value.trim();
+      const body = document.getElementById('api-body').value.trim();
+      const box = document.getElementById('api-response');
+      const statusEl = document.getElementById('api-status-code');
+      const timeEl = document.getElementById('api-time');
+      box.textContent = 'Loading...';
+      const t0 = performance.now();
+      try {
+        const opts = { method: currentMethod, headers: { 'Content-Type': 'application/json' } };
+        if (['POST', 'PATCH'].includes(currentMethod) && body) opts.body = body;
+        const r = await fetch(BASE + url, opts);
+        const ms = Math.round(performance.now() - t0);
+        const text = await r.text();
+        let parsed;
+        try { parsed = JSON.stringify(JSON.parse(text), null, 2); } catch (e) { parsed = text; }
+        box.textContent = parsed;
+        statusEl.textContent = r.status + ' ' + r.statusText;
+        statusEl.style.color = r.ok ? 'var(--green)' : 'var(--red)';
+        timeEl.textContent = ms + 'ms';
+      } catch (e) {
+        box.textContent = 'Error: ' + e.message;
+        statusEl.textContent = 'FAILED';
+        statusEl.style.color = 'var(--red)';
+      }
+    }
+
+    function escHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+    // Init
+    setMethod('GET');
+    startDashboardWS();
+  </script>
+</body>
+
+</html>
