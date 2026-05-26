@@ -42,6 +42,43 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# ── Custom OpenAPI schema to document WebSockets ──
+from fastapi.openapi.utils import get_openapi
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    
+    # Enrich the auto-generated GET /ws/dashboard route with WebSocket upgrade information
+    if "paths" in openapi_schema and "/ws/dashboard" in openapi_schema["paths"]:
+        get_operation = openapi_schema["paths"]["/ws/dashboard"].get("get")
+        if get_operation:
+            get_operation["summary"] = "Dashboard WebSocket Connection & Info"
+            get_operation["description"] = (
+                "Establish a WebSocket connection (WS handshake) or query via HTTP GET to "
+                "retrieve information about the WebSocket connection and expected message format.\n\n"
+                "When upgrading to a WebSocket connection, the server will push backend health stats, "
+                "Nginx networking stats, and database item counts every 5 seconds."
+            )
+            # Add 101 Switching Protocols response alongside the auto-generated 200/422 responses
+            if "responses" not in get_operation:
+                get_operation["responses"] = {}
+            get_operation["responses"]["101"] = {
+                "description": "Switching Protocols (WebSocket connection established successfully)"
+            }
+            
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
+
+
 # ── CORS (allow all origins for local dev) ──
 app.add_middleware(
     CORSMiddleware,

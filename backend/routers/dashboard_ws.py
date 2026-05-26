@@ -8,14 +8,80 @@ import asyncio
 import json
 import logging
 import time
-from typing import Set
+from typing import Set, Optional
 
 import httpx
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel, Field
 from backend.core.config import settings
 
 router = APIRouter(tags=["dashboard-ws"])
 logger = logging.getLogger("dashboard_ws")
+
+
+# ── Response Schemas for API Documentation ──────────────────────────────────
+class BackendStats(BaseModel):
+    status: str = Field(..., description="Status of the backend ('ok' or 'error')")
+    uptime_human: str = Field(..., description="Human-readable uptime duration")
+    version: str = Field(..., description="Application version")
+    items_count: Optional[int] = Field(None, description="Total number of items in the database")
+
+class NetworkingStats(BaseModel):
+    nginx_ok: bool = Field(..., description="Whether Nginx is reachable and healthy")
+    latency_ms: int = Field(..., description="Latency to Nginx in milliseconds (-1 if error)")
+    x_process_time: str = Field(..., description="Process time response header value")
+    x_server: str = Field(..., description="Server software name (usually 'nginx')")
+
+class DashboardWSMessage(BaseModel):
+    type: str = Field("dashboard_update", description="Type of message ('dashboard_update')")
+    timestamp: float = Field(..., description="Unix timestamp of when the stats were collected")
+    backend: BackendStats
+    networking: NetworkingStats
+
+class WebSocketInfoResponse(BaseModel):
+    message: str = Field(..., description="Helpful message explaining how to connect")
+    websocket_url_nginx: str = Field(..., description="WebSocket URL when connecting through Nginx reverse proxy")
+    websocket_url_direct: str = Field(..., description="WebSocket URL when connecting directly to FastAPI")
+    expected_message_schema: DashboardWSMessage = Field(..., description="The schema of the messages pushed by the WebSocket every 5 seconds")
+
+
+# ── HTTP GET endpoint (docs and helper info) ──────────────────────────────────
+@router.get("/ws/dashboard", response_model=WebSocketInfoResponse)
+async def dashboard_ws_info(request: Request):
+    """
+    Get WebSocket connection details and payload schemas.
+    
+    If accessed via HTTP GET (e.g., via Curl, browser, or Swagger UI), this returns
+    instructions on how to establish a WebSocket connection and the exact JSON schema
+    of the real-time messages pushed by the server.
+    """
+    host = request.headers.get("host", f"localhost:{settings.FASTAPI_PORT}")
+    proto = "wss" if request.url.is_secure else "ws"
+    
+    websocket_url_current = f"{proto}://{host}/ws/dashboard"
+    
+    return WebSocketInfoResponse(
+        message="This is a WebSocket endpoint. Please connect using a WebSocket client (e.g. ws:// or wss://).",
+        websocket_url_nginx=f"ws://localhost:{settings.NGINX_PORT}/ws/dashboard",
+        websocket_url_direct=websocket_url_current,
+        expected_message_schema=DashboardWSMessage(
+            type="dashboard_update",
+            timestamp=time.time(),
+            backend=BackendStats(
+                status="ok",
+                uptime_human="0h 5m 23s",
+                version="1.0.0",
+                items_count=42
+            ),
+            networking=NetworkingStats(
+                nginx_ok=True,
+                latency_ms=12,
+                x_process_time="12ms",
+                x_server="nginx"
+            )
+        )
+    )
+
 
 # ── Track all connected dashboard clients ──────────────────────────────────
 _clients: Set[WebSocket] = set()
