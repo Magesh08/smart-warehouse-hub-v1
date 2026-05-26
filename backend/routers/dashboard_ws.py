@@ -12,6 +12,7 @@ from typing import Set
 
 import httpx
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from backend.core.config import settings
 
 router = APIRouter(tags=["dashboard-ws"])
 logger = logging.getLogger("dashboard_ws")
@@ -27,7 +28,7 @@ async def _build_payload() -> dict:
     health_data = {}
     try:
         async with httpx.AsyncClient() as client:
-            r = await client.get("http://127.0.0.1:8000/api/health", timeout=3)
+            r = await client.get(f"http://127.0.0.1:{settings.FASTAPI_PORT}/api/health", timeout=3)
             health_data = r.json()
     except Exception as e:
         health_data = {"status": "error", "error": str(e)}
@@ -37,7 +38,7 @@ async def _build_payload() -> dict:
     nginx_latency_ms = -1
     try:
         async with httpx.AsyncClient() as client:
-            r2 = await client.get("http://127.0.0.1:8080/nginx-health", timeout=3)
+            r2 = await client.get(f"http://127.0.0.1:{settings.NGINX_PORT}/nginx-health", timeout=3)
             nginx_latency_ms = round((time.time() - t_nginx) * 1000)
             nginx_ok = r2.status_code == 200
     except Exception:
@@ -47,7 +48,7 @@ async def _build_payload() -> dict:
     items_count = None
     try:
         async with httpx.AsyncClient() as client:
-            r3 = await client.get("http://127.0.0.1:8000/api/demo/stats", timeout=3)
+            r3 = await client.get(f"http://127.0.0.1:{settings.FASTAPI_PORT}/api/demo/stats", timeout=3)
             d = r3.json()
             items_count = d.get("data", {}).get("items_count")
     except Exception:

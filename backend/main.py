@@ -10,6 +10,8 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from backend.core.config import settings
+
 # Add project root to path so `backend.*` imports work
 sys.path.insert(0, ".")
 
@@ -94,4 +96,10 @@ async def generic_exception_handler(request: Request, exc: Exception):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True, log_level="info")
+    uvicorn.run(
+        "backend.main:app",
+        host=settings.FASTAPI_HOST,
+        port=settings.FASTAPI_PORT,
+        reload=settings.DEBUG,
+        log_level=settings.LOG_LEVEL,
+    )

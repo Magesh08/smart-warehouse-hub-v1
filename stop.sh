@@ -1,5 +1,15 @@
 #!/usr/bin/env bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
 echo "Stopping boulty-v1 services..."
+
+# Load environment config for port references
+if [ -f "env/.env" ]; then
+  set -a
+  source env/.env
+  set +a
+fi
 
 # Stop FastAPI
 if [ -f /tmp/boulty_fastapi.pid ]; then

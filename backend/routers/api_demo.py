@@ -4,9 +4,9 @@ from sqlalchemy import select, func
 from typing import Optional
 import time
 
-from backend.database import get_db
-from backend.models_db import ItemModel
+from backend.db import get_db
 from backend.models import Item, ItemUpdate, APIResponse
+from backend.models.db_models import ItemModel
 
 router = APIRouter(prefix="/api/demo", tags=["demo"])
 

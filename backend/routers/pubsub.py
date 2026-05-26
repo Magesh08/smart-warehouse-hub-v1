@@ -6,9 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 import aiomqtt
 
-from backend.database import get_db
-from backend.models_db import PubSubMessageModel
+from backend.db import get_db
 from backend.models import PublishMessage, APIResponse
+from backend.models.db_models import PubSubMessageModel
+from backend.core.config import settings
 
 router = APIRouter(tags=["pubsub"])
 logger = logging.getLogger("pubsub")
@@ -42,7 +43,7 @@ async def publish_message(payload: PublishMessage, db: AsyncSession = Depends(ge
     }
     
     try:
-        async with aiomqtt.Client("broker.hivemq.com", 1883) as client:
+        async with aiomqtt.Client(settings.MQTT_BROKER_HOST, settings.MQTT_BROKER_PORT) as client:
             await client.publish(payload.channel, payload=json.dumps(envelope))
             published_to_mqtt = True
     except Exception as e:

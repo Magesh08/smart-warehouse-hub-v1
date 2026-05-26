@@ -1,6 +1,6 @@
 """
 Alembic environment configuration for boulty-v1.
-Uses async SQLAlchemy engine.
+Uses async SQLAlchemy engine. Reads DB URL from backend.core.config.settings.
 """
 import asyncio
 from logging.config import fileConfig
@@ -14,10 +14,15 @@ from alembic import context
 # Import all ORM models so Alembic can detect them
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from backend.database import Base
-import backend.models_db  # noqa: F401 — registers models with Base.metadata
+from backend.db.base import Base
+from backend.core.config import settings
+import backend.models.db_models  # noqa: F401 — registers models with Base.metadata
 
 config = context.config
+
+# Override sqlalchemy.url from centralized config
+config.set_main_option("sqlalchemy.url", settings.async_database_url)
+
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
