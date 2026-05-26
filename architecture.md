@@ -6,7 +6,58 @@ Everything about how this system works — from a browser click to a database ro
 
 ## 1. The Big Picture
 
-![System Architecture](docs/images/01_system_architecture.png)
+```mermaid
+graph TB
+    subgraph Browser["🖥️ Browser (Frontend)"]
+        UI["index.html<br/>Dashboard UI"]
+    end
+
+    subgraph Nginx["🌐 Nginx :8080"]
+        NX["Reverse Proxy<br/>+ Static File Server"]
+    end
+
+    subgraph FastAPI["⚡ FastAPI :8000"]
+        MW["Middleware<br/>(CORS, Timing)"]
+        R1["api_demo router"]
+        R2["pubsub router"]
+        R3["dashboard_ws router"]
+    end
+
+    subgraph PostgreSQL["🐘 PostgreSQL :5435"]
+        DB["boulty_db"]
+        T1["items table"]
+        T2["pubsub_messages table"]
+    end
+
+    subgraph MQTT["📡 MQTT Broker"]
+        HMQ["HiveMQ Cloud<br/>broker.hivemq.com:1883"]
+    end
+
+    subgraph Config["⚙️ Config Layer"]
+        ENV["env/.env"]
+        CFG["backend/core/config.py"]
+    end
+
+    UI -->|"HTTP /api/*"| NX
+    UI -->|"WS /ws/*"| NX
+    UI -->|"GET / (static)"| NX
+    UI -->|"MQTT ws://broker:8000"| HMQ
+
+    NX -->|"proxy_pass :8000"| MW
+    NX -->|"serves index.html"| UI
+
+    MW --> R1
+    MW --> R2
+    MW --> R3
+
+    R1 -->|"SQL queries"| DB
+    R2 -->|"SQL + MQTT publish"| DB
+    R2 -->|"publish message"| HMQ
+    R3 -->|"HTTP to self"| MW
+
+    ENV -->|"read by"| CFG
+    CFG -->|"used by all modules"| FastAPI
+```
 
 ### How a request flows through the system:
 
@@ -19,8 +70,6 @@ Browser → Nginx(:8080) → FastAPI(:8000) → PostgreSQL(:5435)
 ---
 
 ## 2. Project Structure — Every File Explained
-
-![Project Structure](docs/images/05_project_structure.png)
 
 ```
 boulty-v1/
@@ -52,7 +101,7 @@ boulty-v1/
 │       ├── __init__.py
 │       ├── api_demo.py            CRUD endpoints for items
 │       ├── pubsub.py              Publish/history endpoints for messaging
-│       └── dashboard_ws.py        WebSocket endpoint for real-time dashboard
+│       └── dashboard_ws.py        WebSocket for real-time dashboard updates
 │
 ├── alembic/                       ⬅ DATABASE MIGRATIONS
 │   ├── env.py                     Migration runner (reads config)
@@ -81,18 +130,44 @@ boulty-v1/
 
 When you run `bash build.sh`, here's exactly what happens step by step:
 
-| Step | What happens | Detail |
-|------|-------------|--------|
-| **0** | Loads all env vars from `env/.env` | `source env/.env` with `set -a` |
-| **1** | Creates Python virtualenv if missing | `python3 -m venv .venv` |
-| **1b** | Installs Python deps | `pip install -r requirements.txt` |
-| **3** | Initializes PostgreSQL data directory | `initdb -D .pgdata` (first run only) |
-| **3b** | Starts PostgreSQL on `$POSTGRES_PORT` | `pg_ctl start -o "-p 5435"` |
-| **3c** | Creates DB user + database | `createuser boulty` + `createdb boulty_db` |
-| **3d** | Runs Alembic migrations | `alembic upgrade head` (creates tables) |
-| **4** | Starts FastAPI via uvicorn | Background process on `:8000` |
-| **5** | Starts Nginx reverse proxy | Listens on `:8080`, proxies to `:8000` |
-| **6** | Opens browser | `open http://localhost:8080` |
+```mermaid
+flowchart TD
+    A["bash build.sh"] --> B["Load env/.env<br/>(source env/.env)"]
+    B --> C{"Python .venv exists?"}
+    C -->|No| D["Create virtualenv"]
+    C -->|Yes| E["pip install requirements"]
+    D --> E
+
+    E --> F{"PostgreSQL .pgdata exists?"}
+    F -->|No| G["initdb -D .pgdata<br/>(create DB cluster)"]
+    F -->|Yes| H{"pg_ctl status running?"}
+    G --> H
+    H -->|No| I["pg_ctl start on port $POSTGRES_PORT"]
+    H -->|Yes| J["Skip — already running"]
+    I --> K["createuser + createdb"]
+    J --> K
+    K --> L["alembic upgrade head<br/>(run migrations)"]
+
+    L --> M["Start uvicorn :$FASTAPI_PORT"]
+    M --> N["Symlink frontend → /tmp"]
+    N --> O["Generate nginx.conf → /tmp"]
+    O --> P["Start nginx :$NGINX_PORT"]
+    P --> Q["Open browser"]
+```
+
+### Step-by-step:
+
+| Step | What happens | File |
+|------|-------------|------|
+| **0** | Loads all env vars from `env/.env` | [build.sh:11-19](file:///Users/apple/Documents/Apps/Magesh/Learning/boulty-v1/build.sh#L11-L19) |
+| **1** | Creates Python virtualenv if missing, installs deps | [build.sh:23-29](file:///Users/apple/Documents/Apps/Magesh/Learning/boulty-v1/build.sh#L23-L29) |
+| **3** | Initializes PostgreSQL data directory if first run | [build.sh:33-36](file:///Users/apple/Documents/Apps/Magesh/Learning/boulty-v1/build.sh#L33-L36) |
+| **3b** | Starts PostgreSQL on `$POSTGRES_PORT` | [build.sh:39-42](file:///Users/apple/Documents/Apps/Magesh/Learning/boulty-v1/build.sh#L39-L42) |
+| **3c** | Creates DB user + database | [build.sh:44-45](file:///Users/apple/Documents/Apps/Magesh/Learning/boulty-v1/build.sh#L44-L45) |
+| **3d** | Runs Alembic migrations (creates tables) | [build.sh:46](file:///Users/apple/Documents/Apps/Magesh/Learning/boulty-v1/build.sh#L46) |
+| **4** | Starts FastAPI via uvicorn | [build.sh:49-55](file:///Users/apple/Documents/Apps/Magesh/Learning/boulty-v1/build.sh#L49-L55) |
+| **5** | Starts Nginx reverse proxy | [build.sh:58-71](file:///Users/apple/Documents/Apps/Magesh/Learning/boulty-v1/build.sh#L58-L71) |
+| **6** | Opens browser | [build.sh:74-75](file:///Users/apple/Documents/Apps/Magesh/Learning/boulty-v1/build.sh#L74-L75) |
 
 ---
 
@@ -100,7 +175,7 @@ When you run `bash build.sh`, here's exactly what happens step by step:
 
 ### What Nginx does here:
 
-Nginx sits between the browser and FastAPI as a **reverse proxy**:
+[nginx.conf](file:///Users/apple/Documents/Apps/Magesh/Learning/boulty-v1/nginx/nginx.conf) configures Nginx as a **reverse proxy** that sits between the browser and FastAPI:
 
 ```
 Browser (:8080)  →  Nginx  →  FastAPI (:8000)
@@ -109,6 +184,16 @@ Browser (:8080)  →  Nginx  →  FastAPI (:8000)
 
 ### Routing Rules:
 
+```mermaid
+graph LR
+    REQ["Browser Request<br/>localhost:8080"] --> NGINX["Nginx"]
+
+    NGINX -->|"/api/*"| FASTAPI["FastAPI :8000<br/>(REST API)"]
+    NGINX -->|"/ws/*"| FASTAPI2["FastAPI :8000<br/>(WebSocket)"]
+    NGINX -->|"/ (everything else)"| STATIC["frontend/index.html<br/>(static files)"]
+    NGINX -->|"/nginx-health"| HEALTH["Returns 200 JSON<br/>(no backend needed)"]
+```
+
 | URL Pattern | Where it goes | Purpose |
 |-------------|--------------|---------|
 | `/api/*` | proxy to FastAPI :8000 | All REST API calls |
@@ -116,9 +201,7 @@ Browser (:8080)  →  Nginx  →  FastAPI (:8000)
 | `/` | serves `frontend/index.html` | Static dashboard UI |
 | `/nginx-health` | Nginx itself returns JSON | Health check endpoint |
 
-### Load Balancing Strategies:
-
-![Load Balancing Strategies](docs/images/06_load_balancing.png)
+### How Load Balancing Works:
 
 Currently the `upstream` block defines a **single backend**:
 
@@ -128,22 +211,24 @@ upstream fastapi_backend {
 }
 ```
 
-To add load balancing, you would add more servers and choose a strategy:
+> [!TIP]
+> **To add load balancing**, you would add more servers and choose a strategy:
+> ```nginx
+> upstream fastapi_backend {
+>     # Round-robin (default) — each request goes to the next server
+>     server 127.0.0.1:8000;
+>     server 127.0.0.1:8001;
+>     server 127.0.0.1:8002;
+>
+>     # Or use least_conn — send to the server with fewest active connections
+>     # least_conn;
+>
+>     # Or use ip_hash — same client always hits the same server (sticky sessions)
+>     # ip_hash;
+> }
+> ```
 
-```nginx
-upstream fastapi_backend {
-    # Round-robin (default) — each request goes to the next server
-    server 127.0.0.1:8000;
-    server 127.0.0.1:8001;
-    server 127.0.0.1:8002;
-
-    # Or use least_conn — send to the server with fewest active connections
-    # least_conn;
-
-    # Or use ip_hash — same client always hits the same server (sticky sessions)
-    # ip_hash;
-}
-```
+### Load Balancing Strategies:
 
 | Strategy | Behavior | Best For |
 |----------|----------|----------|
@@ -164,7 +249,9 @@ proxy_set_header Connection "upgrade";        # ← required for WS handshake
 
 The `/ws/` location has long timeouts (`3600s` = 1 hour) because WebSocket connections are persistent.
 
-### Custom Headers Added by Nginx:
+### Custom Headers:
+
+Every proxied request gets these headers added by Nginx:
 
 ```
 X-Real-IP: 192.168.1.10           ← client's actual IP
@@ -177,9 +264,33 @@ X-Nginx-Proxy: true               ← proves it went through Nginx
 
 ## 5. FastAPI Backend — The Application
 
-### Request Lifecycle:
+### Application Setup — [main.py](file:///Users/apple/Documents/Apps/Magesh/Learning/boulty-v1/backend/main.py)
 
-![Request Flow](docs/images/02_request_flow.png)
+```mermaid
+flowchart TB
+    subgraph Startup["App Startup (Lifespan)"]
+        LS1["Log: 🚀 starting..."]
+        LS2["Mount routers"]
+        LS3["Register middleware"]
+    end
+
+    subgraph Middleware["Request Pipeline"]
+        M1["CORS Middleware<br/>(allow all origins)"]
+        M2["Process Time Middleware<br/>(adds X-Process-Time header)"]
+    end
+
+    subgraph Routers["Route Handlers"]
+        R1["api_demo — /api/demo/*"]
+        R2["pubsub — /api/pubsub/*"]
+        R3["dashboard_ws — /ws/dashboard"]
+        R4["health — /api/health"]
+    end
+
+    Startup --> Middleware
+    Middleware --> Routers
+```
+
+### Request Lifecycle:
 
 Every HTTP request goes through this pipeline:
 
@@ -236,7 +347,7 @@ Every response includes:
 
 ## 6. API Endpoints — Complete Reference
 
-### 6.1 Items CRUD — `api_demo.py`
+### 6.1 Items CRUD — [api_demo.py](file:///Users/apple/Documents/Apps/Magesh/Learning/boulty-v1/backend/routers/api_demo.py)
 
 | Method | Endpoint | Purpose | SQL Operation |
 |--------|----------|---------|---------------|
@@ -250,35 +361,42 @@ Every response includes:
 
 #### How `GET /api/demo/items` Works:
 
-```
-Browser                  Nginx :8080           FastAPI :8000          PostgreSQL :5435
-   │                        │                      │                      │
-   │─GET /api/demo/items──→ │                      │                      │
-   │                        │──proxy_pass──────→   │                      │
-   │                        │                      │──get_db()───────→    │
-   │                        │                      │  (borrow connection) │
-   │                        │                      │──SELECT * FROM ──→   │
-   │                        │                      │  items LIMIT 50      │
-   │                        │                      │ ←─[row1,row2,...]──  │
-   │                        │                      │──SELECT count(*)──→  │
-   │                        │                      │ ←──── 6 ──────────   │
-   │                        │                      │──Build APIResponse   │
-   │                        │ ←── 200 OK + JSON ── │                      │
-   │ ←── Forward response── │                      │                      │
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant N as Nginx :8080
+    participant F as FastAPI :8000
+    participant D as PostgreSQL :5435
+
+    B->>N: GET /api/demo/items?limit=50&offset=0
+    N->>F: proxy_pass → :8000
+    F->>F: get_db() dependency → open session
+    F->>D: SELECT * FROM items ORDER BY id LIMIT 50 OFFSET 0
+    D-->>F: [row1, row2, row3, ...]
+    F->>D: SELECT count(*) FROM items
+    D-->>F: 6
+    F->>F: Build APIResponse JSON
+    F-->>N: 200 OK + JSON + X-Process-Time header
+    N-->>B: Forward response
 ```
 
 #### How `POST /api/demo/items` Works:
 
-```
-Browser                  FastAPI               Pydantic             PostgreSQL
-   │                        │                      │                   │
-   │─POST {name,value}───→  │                      │                   │
-   │                        │──Validate body──→    │                   │
-   │                        │ ←── ✅ Valid ────    │                   │
-   │                        │──INSERT INTO items────────────────────→  │
-   │                        │ ←── id=7 assigned ───────────────────   │
-   │                        │──COMMIT──────────────────────────────→  │
-   │ ←── 201 Created ─────  │                                         │
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant F as FastAPI
+    participant P as Pydantic
+    participant D as PostgreSQL
+
+    B->>F: POST /api/demo/items<br/>{"name":"Widget","value":29.99}
+    F->>P: Validate against Item schema
+    P-->>F: ✅ Valid (or 422 error)
+    F->>F: Create ItemModel ORM object
+    F->>D: INSERT INTO items (name, value, tags) VALUES (...)
+    D-->>F: New row with auto-generated ID
+    F->>D: COMMIT
+    F-->>B: 201 Created + item JSON
 ```
 
 #### How `PATCH /api/demo/items/{id}` Works:
@@ -291,7 +409,7 @@ for key, val in patch.items():
 await db.flush()  # sends UPDATE to DB
 ```
 
-### 6.2 PubSub — `pubsub.py`
+### 6.2 PubSub — [pubsub.py](file:///Users/apple/Documents/Apps/Magesh/Learning/boulty-v1/backend/routers/pubsub.py)
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
@@ -299,23 +417,119 @@ await db.flush()  # sends UPDATE to DB
 | `GET` | `/api/pubsub/history/{channel}` | Get past messages for a channel |
 | `GET` | `/api/pubsub/channels` | List channels info |
 
-### 6.3 Health Endpoints
+#### How Publishing Works — The Dual Write:
 
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| `GET` | `/api/health` | Root health — uptime, version, timestamp |
-| `GET` | `/api/demo/health` | Demo health — items count, storage type |
-| `GET` | `/nginx-health` | Nginx self-response (no backend needed) |
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant F as FastAPI
+    participant D as PostgreSQL
+    participant M as HiveMQ MQTT
+
+    B->>F: POST /api/pubsub/publish<br/>{"channel":"general","message":"Hello!"}
+
+    Note over F: Step 1: Persist to DB
+    F->>D: INSERT INTO pubsub_messages (channel, message, metadata)
+    D-->>F: New row (id=42, published_at=...)
+
+    Note over F: Step 2: Publish to MQTT
+    F->>M: MQTT PUBLISH to topic "general"<br/>envelope: {type, channel, data, timestamp}
+    M-->>F: ACK
+
+    Note over M: Step 3: MQTT broadcasts
+    M->>B: All subscribed browsers receive the message
+
+    F-->>B: 200 OK {persisted: true, mqtt_published: true}
+```
+
+> [!IMPORTANT]
+> **Why two writes?**
+> - **PostgreSQL** = permanent storage (message history survives restarts)
+> - **MQTT** = real-time delivery (instant push to all subscribers)
+> 
+> If MQTT fails, the message is still saved to DB. The response tells you: `mqtt_published: false`.
+
+### 6.3 Dashboard WebSocket — [dashboard_ws.py](file:///Users/apple/Documents/Apps/Magesh/Learning/boulty-v1/backend/routers/dashboard_ws.py)
+
+This replaces HTTP polling with a persistent WebSocket connection.
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant WS as WebSocket /ws/dashboard
+    participant BG as Background Loop
+    participant API as FastAPI APIs
+
+    B->>WS: WebSocket CONNECT
+    WS->>WS: Accept + add to _clients set
+    WS->>B: Immediate snapshot (first data)
+
+    Note over BG: Push loop runs every 5 seconds
+
+    loop Every 5 seconds
+        BG->>API: GET /api/health
+        API-->>BG: Backend status
+        BG->>API: GET /api/demo/stats
+        API-->>BG: Item count
+        BG->>API: GET /nginx-health
+        API-->>BG: Nginx status + latency
+
+        BG->>B: WebSocket SEND dashboard_update JSON
+    end
+
+    B->>WS: Client disconnects
+    WS->>WS: Remove from _clients set
+```
+
+#### Key Design Decisions:
+
+| Feature | How it works |
+|---------|-------------|
+| **Singleton push loop** | Only one `_push_loop` task runs, no matter how many clients connect |
+| **Client tracking** | `_clients: Set[WebSocket]` — O(1) add/remove/iterate |
+| **Dead client cleanup** | If `send_text()` fails, client is silently removed |
+| **Immediate data** | New client gets a snapshot instantly, doesn't wait 5 seconds |
 
 ---
 
 ## 7. PostgreSQL — Database Deep-Dive
 
-### Connection Pooling:
+### Connection Architecture:
 
-![Database Architecture](docs/images/03_database_architecture.png)
+```mermaid
+graph TB
+    subgraph App["FastAPI Application"]
+        R1["Request 1"]
+        R2["Request 2"]
+        R3["Request 3"]
+        Rn["Request N"]
+    end
 
-### Connection Pool Settings — `engine.py`:
+    subgraph Pool["SQLAlchemy Connection Pool"]
+        C1["Connection 1"]
+        C2["Connection 2"]
+        C3["Connection 3"]
+        C10["... Connection 10"]
+        OF["Overflow Pool<br/>(up to 20 extra)"]
+    end
+
+    subgraph PG["PostgreSQL :5435"]
+        DB["boulty_db"]
+    end
+
+    R1 --> C1
+    R2 --> C2
+    R3 --> C3
+    Rn --> OF
+
+    C1 --> DB
+    C2 --> DB
+    C3 --> DB
+    C10 --> DB
+    OF --> DB
+```
+
+### Connection Pool Settings — [engine.py](file:///Users/apple/Documents/Apps/Magesh/Learning/boulty-v1/backend/db/engine.py)
 
 ```python
 engine = create_async_engine(
@@ -393,7 +607,7 @@ CREATE TABLE pubsub_messages (
 
 ### Indexing — How Queries Are Faster
 
-Indexes are defined in the migration file and ORM models:
+Indexes are defined in the [migration file](file:///Users/apple/Documents/Apps/Magesh/Learning/boulty-v1/alembic/versions/001_init.py) and [ORM models](file:///Users/apple/Documents/Apps/Magesh/Learning/boulty-v1/backend/models/db_models.py):
 
 | Table | Index | Column(s) | Why |
 |-------|-------|-----------|-----|
@@ -440,32 +654,34 @@ ORDER BY published_at DESC LIMIT 50;
 
 The current setup uses a **single-node** PostgreSQL instance (`.pgdata/` directory). Here's how you'd add replicas:
 
-```
-                    ┌─── Write Operations ───┐
-                    │      FastAPI           │
-                    └───────┬────────────────┘
-                            │
-                            ▼
-                ┌───────────────────────┐
-                │   Primary (Read/Write) │
-                │   PostgreSQL :5435     │
-                └──────┬────────┬───────┘
-                       │        │
-            WAL streaming  WAL streaming
-            (async)        (async)
-                       │        │
-                       ▼        ▼
-            ┌──────────────┐ ┌──────────────┐
-            │  Replica 1   │ │  Replica 2   │
-            │  :5436 (Read)│ │  :5437 (Read)│
-            └──────────────┘ └──────────────┘
+```mermaid
+graph TB
+    subgraph Writes["Write Operations"]
+        APP["FastAPI"]
+    end
+
+    subgraph Primary["Primary (Read/Write)"]
+        P["PostgreSQL Primary<br/>:5435"]
+    end
+
+    subgraph Replicas["Read Replicas"]
+        R1["Replica 1<br/>:5436"]
+        R2["Replica 2<br/>:5437"]
+    end
+
+    APP -->|"INSERT/UPDATE/DELETE"| P
+    APP -->|"SELECT (reads)"| R1
+    APP -->|"SELECT (reads)"| R2
+    P -->|"WAL streaming<br/>(async replication)"| R1
+    P -->|"WAL streaming<br/>(async replication)"| R2
 ```
 
-**Replication types in PostgreSQL:**
-- **Streaming Replication**: Primary sends WAL (Write-Ahead Log) to replicas in real-time
-- **Synchronous**: Primary waits for replica to confirm write (slower but consistent)
-- **Asynchronous**: Primary doesn't wait (faster but replica may lag behind)
-- **Logical Replication**: Selective — replicate specific tables only
+> [!NOTE]
+> **Replication types in PostgreSQL:**
+> - **Streaming Replication**: Primary sends WAL (Write-Ahead Log) to replicas in real-time
+> - **Synchronous**: Primary waits for replica to confirm write (slower but consistent)
+> - **Asynchronous**: Primary doesn't wait (faster but replica may lag behind)
+> - **Logical Replication**: Selective — replicate specific tables only
 
 ---
 
@@ -473,7 +689,39 @@ The current setup uses a **single-node** PostgreSQL instance (`.pgdata/` directo
 
 ### Architecture:
 
-![PubSub Architecture](docs/images/04_pubsub_architecture.png)
+```mermaid
+graph TB
+    subgraph Publisher["Publishing Side"]
+        B1["Browser: Publish Card"]
+        F1["FastAPI /api/pubsub/publish"]
+        DB["PostgreSQL<br/>(persistent storage)"]
+    end
+
+    subgraph Broker["MQTT Broker"]
+        HMQ["HiveMQ Cloud<br/>broker.hivemq.com"]
+        T1["Topic: general"]
+        T2["Topic: alerts"]
+        T3["Topic: logs"]
+    end
+
+    subgraph Subscribers["Subscribing Side"]
+        B2["Browser 1: Subscribe Card"]
+        B3["Browser 2: Subscribe Card"]
+        B4["Browser 3: Subscribe Card"]
+    end
+
+    B1 -->|"POST JSON"| F1
+    F1 -->|"1. INSERT"| DB
+    F1 -->|"2. MQTT PUBLISH"| HMQ
+
+    HMQ --> T1
+    HMQ --> T2
+    HMQ --> T3
+
+    T1 -->|"push"| B2
+    T1 -->|"push"| B3
+    T2 -->|"push"| B4
+```
 
 ### Message Flow — Step by Step:
 
@@ -497,29 +745,6 @@ The current setup uses a **single-node** PostgreSQL instance (`.pgdata/` directo
 9. JavaScript parses JSON and adds message to the live feed
 ```
 
-### Why Two Writes (Dual Write Pattern)?
-
-```
-                    POST /api/pubsub/publish
-                            │
-                    ┌───────┴───────┐
-                    │               │
-                    ▼               ▼
-            ┌──────────────┐ ┌──────────────┐
-            │ PostgreSQL   │ │ MQTT Broker  │
-            │ (persistent) │ │ (real-time)  │
-            │              │ │              │
-            │ Survives     │ │ Instant push │
-            │ restarts     │ │ to all subs  │
-            │              │ │              │
-            │ History API  │ │ Live feed    │
-            └──────────────┘ └──────────────┘
-```
-
-- **PostgreSQL** = permanent storage (message history survives restarts)
-- **MQTT** = real-time delivery (instant push to all subscribers)
-- If MQTT fails, the message is still saved to DB. Response tells you: `mqtt_published: false`
-
 ### Two Different Connections:
 
 | Connection | Protocol | Port | Direction | Purpose |
@@ -527,7 +752,8 @@ The current setup uses a **single-node** PostgreSQL instance (`.pgdata/` directo
 | Backend → HiveMQ | MQTT (TCP) | 1883 | FastAPI publishes | Server-side message publish |
 | Browser → HiveMQ | MQTT over WebSocket | 8000 | Browser subscribes | Client-side real-time receive |
 
-> **Note:** The browser connects **directly to HiveMQ** (not through your Nginx/FastAPI). This means messages arrive instantly without going through your server for the subscribe side.
+> [!IMPORTANT]
+> The browser connects **directly to HiveMQ** (not through your Nginx/FastAPI). This means messages arrive instantly without going through your server for the subscribe side.
 
 ### MQTT Topics = Channels:
 
@@ -558,28 +784,15 @@ Any browser subscribed to topic `"general"` receives every message published to 
 
 ### Connection Lifecycle:
 
+```mermaid
+stateDiagram-v2
+    [*] --> Connecting: Page loads → startDashboardWS()
+    Connecting --> Connected: WebSocket handshake OK
+    Connected --> Receiving: Server pushes data
+    Receiving --> Receiving: Every 5 seconds
+    Receiving --> Disconnected: Network error / server stop
+    Disconnected --> Connecting: Auto-reconnect after 5s
 ```
-[Page loads] → startDashboardWS()
-     ↓
-[Connecting] → WebSocket handshake
-     ↓
-[Connected] → Server pushes immediate snapshot
-     ↓
-[Receiving] → Data pushed every 5 seconds
-     ↓ (on error)
-[Disconnected] → Auto-reconnect after 5 seconds
-     ↓
-[Connecting] → Loop back
-```
-
-### Key Design Decisions:
-
-| Feature | How it works |
-|---------|-------------|
-| **Singleton push loop** | Only one `_push_loop` task runs, no matter how many clients connect |
-| **Client tracking** | `_clients: Set[WebSocket]` — O(1) add/remove/iterate |
-| **Dead client cleanup** | If `send_text()` fails, client is silently removed |
-| **Immediate data** | New client gets a snapshot instantly, doesn't wait 5 seconds |
 
 ### Data Payload (sent every 5 seconds):
 
@@ -604,19 +817,18 @@ Any browser subscribed to topic `"general"` receives every message published to 
 
 ---
 
-## 10. Configuration System — `config.py`
+## 10. Configuration System — [config.py](file:///Users/apple/Documents/Apps/Magesh/Learning/boulty-v1/backend/core/config.py)
 
 ### How settings flow through the system:
 
-```
-env/.env file (or real env vars)
-    │
-    ▼
-Pydantic Settings (config.py) ──→ db/engine.py (database URL, pool settings)
-                               ──→ routers/pubsub.py (MQTT host/port)
-                               ──→ main.py (FastAPI host/port/debug)
-                               ──→ routers/dashboard_ws.py (port references)
-                               ──→ alembic/env.py (migration DB URL)
+```mermaid
+graph LR
+    ENV["env/.env file<br/>(or real env vars)"] -->|"read by"| PS["Pydantic Settings<br/>config.py"]
+    PS -->|"settings.async_database_url"| ENG["db/engine.py"]
+    PS -->|"settings.MQTT_BROKER_HOST"| PUB["routers/pubsub.py"]
+    PS -->|"settings.FASTAPI_PORT"| MAIN["main.py"]
+    PS -->|"settings.NGINX_PORT"| DASH["routers/dashboard_ws.py"]
+    PS -->|"settings.async_database_url"| ALM["alembic/env.py"]
 ```
 
 ### Priority Order (highest wins):
@@ -640,16 +852,12 @@ POSTGRES_PORT=5436 python -m uvicorn backend.main:app
 
 Alembic tracks your database schema changes like **git for your database**.
 
-```
-alembic_version table     Migration files
-┌───────────────────┐     ┌─────────────────────┐
-│ current_rev: 001  │ ──→ │ 001_init.py         │
-└───────────────────┘     │ (creates tables +    │
-                          │  seeds data)         │
-                          ├─────────────────────┤
-                          │ 002_add_users.py     │
-                          │ (future migration)   │
-                          └─────────────────────┘
+```mermaid
+flowchart LR
+    M1["001_init.py<br/>Create tables<br/>+ seed data"] --> DB["PostgreSQL<br/>boulty_db"]
+    M2["002_add_users.py<br/>(future migration)"] -.-> DB
+
+    DB --> AV["alembic_version table<br/>current_rev = '001'"]
 ```
 
 ### How `alembic upgrade head` works:
@@ -661,7 +869,7 @@ alembic_version table     Migration files
 4. If there were new migrations, run them in order
 ```
 
-### The initial migration — `001_init.py`:
+### The initial migration — [001_init.py](file:///Users/apple/Documents/Apps/Magesh/Learning/boulty-v1/alembic/versions/001_init.py):
 
 ```
 upgrade():
@@ -678,9 +886,11 @@ downgrade():
 
 ---
 
-## 12. Frontend Dashboard — `index.html`
+## 12. Frontend Dashboard — [index.html](file:///Users/apple/Documents/Apps/Magesh/Learning/boulty-v1/frontend/index.html)
 
-### Layout:
+### Architecture:
+
+Single HTML file with embedded CSS + JavaScript. No build tools, no frameworks.
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -727,42 +937,50 @@ downgrade():
 
 ### Example: User creates an item via API Tester
 
-```
-  User              Browser            Nginx           FastAPI        Pydantic       DB Session      PostgreSQL
-   │                   │                 │                │               │               │               │
-   │  Click "POST"     │                 │                │               │               │               │
-   │  fill form        │                 │                │               │               │               │
-   │  click "▶ Send"   │                 │                │               │               │               │
-   │──────────────────→│                 │                │               │               │               │
-   │                   │ POST /api/demo  │                │               │               │               │
-   │                   │ /items          │                │               │               │               │
-   │                   │ {name,value}    │                │               │               │               │
-   │                   │────────────────→│                │               │               │               │
-   │                   │                 │  proxy_pass    │               │               │               │
-   │                   │                 │  + add headers │               │               │               │
-   │                   │                 │───────────────→│               │               │               │
-   │                   │                 │                │  Validate     │               │               │
-   │                   │                 │                │  request body │               │               │
-   │                   │                 │                │──────────────→│               │               │
-   │                   │                 │                │  ✅ Valid     │               │               │
-   │                   │                 │                │←─────────────│               │               │
-   │                   │                 │                │  get_db()                     │               │
-   │                   │                 │                │  borrow conn                  │               │
-   │                   │                 │                │─────────────────────────────→ │               │
-   │                   │                 │                │               │               │  INSERT INTO  │
-   │                   │                 │                │               │               │  items (...)  │
-   │                   │                 │                │               │               │──────────────→│
-   │                   │                 │                │               │               │  id=7         │
-   │                   │                 │                │               │               │←─────────────│
-   │                   │                 │                │               │               │  COMMIT       │
-   │                   │                 │                │               │               │──────────────→│
-   │                   │                 │                │  Build APIResponse            │               │
-   │                   │                 │  201 + JSON    │               │               │               │
-   │                   │                 │←──────────────│               │               │               │
-   │                   │  Forward resp   │               │               │               │               │
-   │                   │←───────────────│                │               │               │               │
-   │  Display result   │                 │                │               │               │               │
-   │←─────────────────│                 │                │               │               │               │
+```mermaid
+sequenceDiagram
+    actor User
+    participant HTML as index.html (Browser)
+    participant NGINX as Nginx :8080
+    participant CORS as CORS Middleware
+    participant TIME as Timing Middleware
+    participant ROUTER as api_demo Router
+    participant PYDANTIC as Pydantic Validation
+    participant SESSION as DB Session (Pool)
+    participant PG as PostgreSQL :5435
+
+    User->>HTML: Click "POST" tab, fill form, click "▶ Send"
+    HTML->>NGINX: POST /api/demo/items<br/>{"name":"Test","value":42}
+
+    Note over NGINX: Match /api/* → proxy to :8000
+
+    NGINX->>CORS: Forward request + add proxy headers
+    CORS->>CORS: Add Access-Control-Allow-Origin: *
+    CORS->>TIME: Pass through
+
+    TIME->>TIME: Start timer (t0)
+    TIME->>ROUTER: Route to create_item handler
+
+    ROUTER->>PYDANTIC: Validate body against Item schema
+    PYDANTIC-->>ROUTER: ✅ Valid
+
+    ROUTER->>SESSION: get_db() → borrow connection from pool
+    SESSION->>PG: INSERT INTO items (name, value, tags) VALUES ('Test', 42, '[]')
+    PG-->>SESSION: OK — id=7 assigned
+    SESSION->>PG: COMMIT
+    SESSION-->>ROUTER: Return ItemModel object
+
+    ROUTER->>ROUTER: Build APIResponse JSON
+    ROUTER-->>TIME: 201 Created + JSON body
+
+    TIME->>TIME: Calculate elapsed: 8.5ms
+    TIME-->>CORS: Add header X-Process-Time: 8.5ms
+
+    CORS-->>NGINX: Response with CORS headers
+    NGINX-->>HTML: Forward to browser
+
+    HTML->>HTML: Display JSON in response box
+    HTML->>User: Shows: {"success": true, "data": {"id": 7, ...}}
 ```
 
 ---
@@ -779,18 +997,3 @@ downgrade():
 | **PubSub** | HiveMQ MQTT | 1883/8000 | Real-time message broker |
 | **Config** | Pydantic Settings | — | Centralized env configuration |
 | **ORM** | SQLAlchemy 2.0 (async) | — | Object-relational mapping |
-
----
-
-## Diagram Files
-
-All architecture diagrams are stored in `docs/images/`:
-
-| File | Description |
-|------|-------------|
-| `01_system_architecture.png` | Full system overview with all components |
-| `02_request_flow.png` | HTTP request pipeline through all layers |
-| `03_database_architecture.png` | PostgreSQL connection pooling and tables |
-| `04_pubsub_architecture.png` | MQTT publish/subscribe message flow |
-| `05_project_structure.png` | Visual project folder tree |
-| `06_load_balancing.png` | Nginx load balancing strategies |
