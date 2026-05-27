@@ -30,7 +30,7 @@ echo "[1/6] Installing Python deps..."
 # (PubSub installation block removed since we use public HiveMQ)
 
 # ── PostgreSQL ──
-echo "[3/6] Starting PostgreSQL and running migrations..."
+echo "[2/6] Starting PostgreSQL and running migrations..."
 if [ ! -d ".pgdata" ]; then
   echo "  Initializing local database cluster in .pgdata..."
   initdb -D .pgdata
@@ -47,7 +47,7 @@ createdb -p "${POSTGRES_PORT}" -O "${POSTGRES_USER}" "${POSTGRES_DB}" 2>/dev/nul
 .venv/bin/alembic upgrade head
 
 # ── FastAPI backend ──
-echo "[4/6] Starting FastAPI on :${FASTAPI_PORT}..."
+echo "[3/6] Starting FastAPI on :${FASTAPI_PORT}..."
 pkill -f "uvicorn backend.main:app" 2>/dev/null || true
 sleep 1
 PYTHONPATH="$SCRIPT_DIR" .venv/bin/uvicorn backend.main:app \
@@ -56,6 +56,18 @@ PYTHONPATH="$SCRIPT_DIR" .venv/bin/uvicorn backend.main:app \
 echo $! > /tmp/boulty_fastapi.pid
 echo "  FastAPI PID: $!"
 sleep 2
+
+# ── Build React frontend ──
+echo "[4/6] Building React frontend..."
+(
+  cd "$SCRIPT_DIR/frontend/smart-warehouse-hub"
+  if [ ! -d node_modules ]; then
+    echo "  Installing npm deps..."
+    npm install --silent
+  fi
+  npm run build --silent 2>&1 | grep -E '(✓|error|warn)' || true
+  echo "  React build done → dist/"
+)
 
 # ── Nginx ──
 echo "[5/6] Setting up Nginx on :${NGINX_PORT}..."
@@ -76,14 +88,15 @@ echo "  Nginx started on :${NGINX_PORT}"
 # ── Open browser ──
 echo "[6/6] Opening browser..."
 sleep 1
-open "http://localhost:${NGINX_PORT}" 2>/dev/null || true
+open "http://localhost:${NGINX_PORT}/smartwarehousedata/" 2>/dev/null || true
 
 echo ""
 echo "✅ boulty-v1 is running!"
-echo "   Web UI   → http://localhost:${NGINX_PORT}"
-echo "   FastAPI  → http://localhost:${FASTAPI_PORT}"
-echo "   API Docs → http://localhost:${FASTAPI_PORT}/docs"
-echo "   PubSub   → ${MQTT_BROKER_HOST}:${MQTT_BROKER_PORT}"
+echo "   Smart Warehouse App  → http://localhost:${NGINX_PORT}/smartwarehouseapp/"
+echo "   Smart Warehouse Data → http://localhost:${NGINX_PORT}/smartwarehousedata/"
+echo "   FastAPI              → http://localhost:${FASTAPI_PORT}"
+echo "   API Docs             → http://localhost:${FASTAPI_PORT}/docs"
+echo "   PubSub               → ${MQTT_BROKER_HOST}:${MQTT_BROKER_PORT}"
 echo ""
 echo "   Logs:"
 echo "     FastAPI: tail -f /tmp/boulty_fastapi.log"

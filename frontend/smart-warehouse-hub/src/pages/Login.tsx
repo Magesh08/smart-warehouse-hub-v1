@@ -43,7 +43,7 @@ export const Login: React.FC = () => {
       {/* Background visual accents */}
       <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-cyan-500/10 blur-[100px] animate-pulse"></div>
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full bg-indigo-500/10 blur-[100px] animate-pulse [animation-duration:8s]"></div>
-      
+
       {/* Premium Glassmorphic Card Container */}
       <div className="relative z-10 w-full max-w-md">
         {/* Logo/Brand Header */}
@@ -71,7 +71,7 @@ export const Login: React.FC = () => {
               Enter your credentials to manage smart devices & orders.
             </CardDescription>
           </CardHeader>
-          
+
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4 pt-6">
               {/* Username Input Field */}
