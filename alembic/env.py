@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from backend.db.base import Base
 from backend.core.config import settings
 import backend.models.db_models  # noqa: F401 — registers models with Base.metadata
+import backend.models.warehouse_models  # noqa: F401 — registers warehouse models with Base.metadata
 
 config = context.config
 

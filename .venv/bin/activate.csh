@@ -8,7 +8,7 @@ alias deactivate 'test $?_OLD_VIRTUAL_PATH != 0 && setenv PATH "$_OLD_VIRTUAL_PA
 # Unset irrelevant variables.
 deactivate nondestructive
 
-setenv VIRTUAL_ENV "/Users/apple/Documents/Apps/leapmile_apps/V- 37 - 27:04/boulty-v1/.venv"
+setenv VIRTUAL_ENV "/Users/apple/Documents/Apps/Magesh/smart-warehouse-hub/boulty-v1/.venv"
 
 set _OLD_VIRTUAL_PATH="$PATH"
 setenv PATH "$VIRTUAL_ENV/bin:$PATH"

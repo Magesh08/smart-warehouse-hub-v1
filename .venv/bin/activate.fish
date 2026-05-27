@@ -30,7 +30,7 @@ end
 # Unset irrelevant variables.
 deactivate nondestructive
 
-set -gx VIRTUAL_ENV "/Users/apple/Documents/Apps/leapmile_apps/V- 37 - 27:04/boulty-v1/.venv"
+set -gx VIRTUAL_ENV "/Users/apple/Documents/Apps/Magesh/smart-warehouse-hub/boulty-v1/.venv"
 
 set -gx _OLD_VIRTUAL_PATH $PATH
 set -gx PATH "$VIRTUAL_ENV/bin" $PATH

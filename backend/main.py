@@ -18,6 +18,11 @@ sys.path.insert(0, ".")
 from backend.routers.api_demo import router as demo_router
 from backend.routers.pubsub import router as pubsub_router
 from backend.routers.dashboard_ws import router as dashboard_ws_router
+from backend.routers.inventory import router as inventory_router
+from backend.routers.orders import router as orders_router
+from backend.routers.auth import router as auth_router, user_router
+from backend.routers.dashboard_api import router as dashboard_api_router
+from backend.routers.warehouse_ws import router as warehouse_ws_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -105,6 +110,12 @@ async def add_process_time_header(request: Request, call_next):
 app.include_router(demo_router)
 app.include_router(pubsub_router)
 app.include_router(dashboard_ws_router)
+app.include_router(auth_router)
+app.include_router(user_router)
+app.include_router(inventory_router)
+app.include_router(orders_router)
+app.include_router(dashboard_api_router)
+app.include_router(warehouse_ws_router)
 
 
 # ── Root health endpoint ──

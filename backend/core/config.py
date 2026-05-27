@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     LOG_LEVEL: str = "info"
 
+    # ── Authentication / JWT ───────────────────────────────────
+    SECRET_KEY: str = "supersecretkeywhichmustchangeinproduction1234567890"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+
     # ── Nginx ───────────────────────────────────────────────────
     NGINX_PORT: int = 8080
 
