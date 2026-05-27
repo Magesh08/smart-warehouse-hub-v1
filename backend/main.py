@@ -30,7 +30,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("boulty-v1")
 
-_start_time = time.time()
+from backend.core.uptime import get_uptime_seconds, get_uptime_human
 
 
 @asynccontextmanager
@@ -121,13 +121,13 @@ app.include_router(warehouse_ws_router)
 # ── Root health endpoint ──
 @app.get("/api/health")
 async def root_health():
-    uptime = round(time.time() - _start_time, 2)
+    uptime = get_uptime_seconds()
     return {
         "status": "ok",
         "service": "boulty-v1",
         "version": "1.0.0",
         "uptime_seconds": uptime,
-        "uptime_human": f"{int(uptime // 3600)}h {int((uptime % 3600) // 60)}m {int(uptime % 60)}s",
+        "uptime_human": get_uptime_human(uptime),
         "timestamp": time.time(),
     }
 
